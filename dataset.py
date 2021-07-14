@@ -1,8 +1,8 @@
+import cv2
 import torch.utils.data as data
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in [".png", ".jpg", ".jpeg", "JPG"])
@@ -37,17 +37,19 @@ class HazyData(data.Dataset):
     def __getitem__(self, index):
         #targetImage
         name = self.target_ids[index]
-        target_image = plt.imread(os.path.join(self.target_dir, name))
-        target_image = np.asarray(target_image, np.float32)
-        target_image /= 255
+        target_image = plt.imread(os.path.join(self.target_dir, name))[:,:,:3]
+        if target_image.dtype==np.uint8:
+            target_image = np.asarray(target_image, np.float32)
+            target_image /= 255
         target_image = np.expand_dims(target_image,0)
         #depthImage
         dep = plt.imread(os.path.join(self.depth_dir,name))
-        dep = np.expand_dims(dep,0)
+        dep = cv2.cvtColor(dep,cv2.COLOR_RGB2GRAY)
+        dep = dep[None,:,:,None]
         if self.extAug:
             #randomly crop
             hw = self.crop_size
-            _,h,w = target_image.shape
+            _,h,w,c = target_image.shape
             i = np.random.randint(h-hw+1)
             j = np.random.randint(w-hw+1)
             target_image = target_image[:,i:i+hw,j:j+hw]
@@ -63,14 +65,16 @@ class HazyData(data.Dataset):
                 dep=np.rot90(dep,rotate_degree,(1,2))
         #hazyImage
         if self.random:
-            beta = np.random.randint(self.beta)
-            alpha = np.random.rand(self.alpha)
+            beta = np.random.rand(1)*self.beta
+            alpha = np.random.rand(1)*self.alpha
         else:
             beta = self.beta
             alpha = self.alpha
         trans = np.zeros_like(dep,np.float32)+self.bias
-        np.exp(-beta / dep, out=trans, where=dep > 0)
+        np.exp(-beta / dep, out=trans, where=dep > self.bias)
         hazy = (target_image*trans + alpha*(1-trans)).astype(np.float32)
+        hazy = np.transpose(hazy,[0,3,1,2])
+        target_image = np.transpose(target_image,[0,3,1,2])
         return hazy.copy(), target_image.copy(), name
 
 

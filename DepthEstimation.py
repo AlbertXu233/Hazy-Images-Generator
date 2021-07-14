@@ -1,5 +1,4 @@
 import os
-
 import cv2
 import torch
 import os
@@ -9,6 +8,7 @@ parser = ArgumentParser(description='generate depth map with MiDaS')
 parser.add_argument('--model_type',default='l',type=str,help='one of {l,m,s}')
 parser.add_argument('--input_dir',default='data/gt',type=str,help='path of input images')
 parser.add_argument('--output_dir',default='data/depth',type=str,help='path of output depth maps')
+parser.add_argument('--sort_by_num',default=True,type=bool,help='whether sort the image names by their numbers or not')
 args = parser.parse_args()
 # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
 # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
@@ -26,7 +26,6 @@ if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
 else:
     transform = midas_transforms.small_transform
 
-
 def depthPrediction(imgName):
     img = cv2.imread(imgName)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -43,11 +42,14 @@ def depthPrediction(imgName):
     return output
 imgDir = args.input_dir
 resDir = args.output_dir
+if resDir=="data/depth":
+    resDir = imgDir.replace(imgDir.split('/')[-1],'depth')
 os.makedirs(resDir,exist_ok=True)
 names = os.listdir(imgDir)
-names.sort(key=lambda x:int(x.split('.')[0]))
+if args.sort_by_num:
+    names.sort(key=lambda x:int(x.split('.')[0]))
 for name in names:
-    imgName = imgDir+name
+    imgName = os.path.join(imgDir,name)
     res = depthPrediction(imgName)
-    plt.imsave(resDir+name)
+    plt.imsave(os.path.join(resDir,name),res)
     print(name)
